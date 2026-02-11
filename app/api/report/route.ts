@@ -15,22 +15,24 @@ export async function POST(req: Request) {
     let y = height - margin;
     const lineHeight = 16;
 
-    // ---- SIMPLE SAFE WRAPPER ----
+    // --------------------------
+    // Simple safe word wrapping
+    // --------------------------
     const wrap = (text: string, maxChars = 90) => {
       const words = text.split(' ');
       const lines: string[] = [];
       let current = '';
 
-      words.forEach(word => {
+      words.forEach((word) => {
         if ((current + word).length > maxChars) {
-          lines.push(current);
+          lines.push(current.trim());
           current = word + ' ';
         } else {
           current += word + ' ';
         }
       });
 
-      if (current) lines.push(current);
+      if (current) lines.push(current.trim());
       return lines;
     };
 
@@ -42,13 +44,13 @@ export async function POST(req: Request) {
     ) => {
       const lines = wrap(text);
 
-      lines.forEach(line => {
+      lines.forEach((line) => {
         if (y < margin + 40) {
           page = pdf.addPage();
           y = height - margin;
         }
 
-        page.drawText(line.trim(), {
+        page.drawText(line, {
           x: margin,
           y,
           size,
@@ -59,7 +61,7 @@ export async function POST(req: Request) {
         y -= lineHeight;
       });
 
-      y -= 4;
+      y -= 6; // paragraph spacing
     };
 
     const divider = () => {
@@ -90,7 +92,7 @@ export async function POST(req: Request) {
     divider();
 
     // ======================
-    // KEY RATIONALE (YOUR EXACT WORDING)
+    // KEY RATIONALE (Your Exact Content)
     // ======================
 
     draw('Key Rationale', 14, true);
@@ -151,23 +153,34 @@ export async function POST(req: Request) {
     });
 
     divider();
+
     draw(
       'This report was generated using the Blockchain Suitability Assessment Framework.',
       9
     );
 
+    // ======================
+    // FINAL SAFE RETURN (Vercel Fix)
+    // ======================
+
     const pdfBytes = await pdf.save();
 
-    return new Response(new Blob([pdfBytes], { type: 'application/pdf' }), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition':
-          'attachment; filename="Blockchain_Assessment_Report.pdf"',
-      },
-    });
+    // Create a true ArrayBuffer (avoids SharedArrayBuffer issue)
+    const arrayBuffer = new ArrayBuffer(pdfBytes.length);
+    const view = new Uint8Array(arrayBuffer);
+    view.set(pdfBytes);
+
+    return new Response(arrayBuffer, {
+    headers: {
+    'Content-Type': 'application/pdf',
+    'Content-Disposition':
+      'attachment; filename="Blockchain_Assessment_Report.pdf"',
+  },
+});
+
 
   } catch (error) {
-    console.error(error);
+    console.error('PDF generation error:', error);
     return new Response('Error generating PDF', { status: 500 });
   }
 }
