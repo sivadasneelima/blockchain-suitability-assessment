@@ -4,16 +4,12 @@ import { Box, Typography, Divider, Button } from '@mui/material';
 import { Answer } from './content';
 import { buildReport } from './reportBuilder';
 
-/**
- * NarrativeResult
- * Shows ONLY the final canonical verdict from the flowchart
- */
-export default function NarrativeResult({
-  answers,
-}: {
+interface NarrativeResultProps {
   answers: Record<string, Answer>;
-}) {
-  const verdict = deriveFinalVerdict(answers);
+}
+
+export default function NarrativeResult({ answers }: NarrativeResultProps) {
+  const report = buildReport(answers);
 
   return (
     <Box>
@@ -21,18 +17,32 @@ export default function NarrativeResult({
         Assessment Summary
       </Typography>
 
-      <Typography
-        variant="h6"
-        sx={{ fontWeight: 600, mt: 2 }}
-      >
-        {verdict}
+      <Typography variant="h6" sx={{ fontWeight: 600, mt: 2, color: 'text.primary' }}>
+        Verdict: {report.summary}
       </Typography>
 
       <Divider sx={{ my: 3 }} />
 
+      {/* This renders beautifully on your main page web UI */}
+      <Box sx={{ mt: 2, mb: 3 }}>
+        {report.sections.map((section, idx) => (
+          <Box key={idx} sx={{ mb: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+              {section.title}
+            </Typography>
+            {section.paragraphs.map((p, pIdx) => (
+              <Typography key={pIdx} variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                • {p}
+              </Typography>
+            ))}
+          </Box>
+        ))}
+      </Box>
+
+      {/* FIX: We pass both report.summary AND report.sections directly into the downloader */}
       <Button
         variant="outlined"
-        onClick={() => downloadPDF(answers)}
+        onClick={() => downloadPDF(answers, report.summary, report.sections)}
       >
         Download PDF Report
       </Button>
@@ -41,51 +51,20 @@ export default function NarrativeResult({
 }
 
 /**
- * Maps answers directly to the canonical outcomes
- * defined in the flowchart
- */
-function deriveFinalVerdict(
-  answers: Record<string, Answer>
-): string {
-  // 1. No decentralisation required → exit
-  if (answers['decentralised_need'] === 'no') {
-    return 'Please search for alternative models';
-  }
-
-  // 2. Cost constraints override everything
-  if (
-    answers['budget'] === 'no' ||
-    answers['long_term_cost'] === 'no'
-  ) {
-    return 'Please search for alternative models';
-  }
-
-  // 3. Sensitive data + known participants
-  if (
-    answers['sensitive_data'] === 'yes' &&
-    answers['known_participants'] === 'yes'
-  ) {
-    return 'A Private Permissioned Ledger can be an optimum choice here';
-  }
-
-  // 4. Default case → public permissionless
-  return 'A Public Permissionless Ledger can be an optimum choice here';
-}
-
-/**
- * Client-side PDF download
+ * Client-side PDF download passing full dynamic text parameters
  */
 async function downloadPDF(
-  answers: Record<string, Answer>
+  answers: Record<string, Answer>, 
+  verdict: string, 
+  sections: { title: string; paragraphs: string[] }[]
 ) {
-  const verdict = deriveFinalVerdict(answers);
-
   const res = await fetch('/api/report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       answers,
       verdict,
+      sections, // FIX: This hands the bullet array over to your pdf-lib engine in route.ts
     }),
   });
 
